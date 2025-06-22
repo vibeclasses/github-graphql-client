@@ -314,7 +314,7 @@ jobs:
             await github.rest.repos.updateRelease({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              release_id: ${{ github.event.release.id }},
+              release_id: context.payload.release.id,
               name: `v${newVersion}`,
               tag_name: `v${newVersion}`
             });
