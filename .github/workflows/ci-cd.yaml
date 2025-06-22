@@ -314,13 +314,38 @@ jobs:
         with:
           script: |
             const newVersion = require('./package.json').version;
-            await github.rest.repos.updateRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: context.payload.release.id,
-              name: `v${newVersion}`,
-              tag_name: `v${newVersion}`
-            });
+            
+            // Check if this is a release event
+            if (context.payload.release && context.payload.release.id) {
+              // Update existing release
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: context.payload.release.id,
+                name: `v${newVersion}`,
+                tag_name: `v${newVersion}`
+              });
+            } else {
+              // Create a new release if not triggered by a release event
+              console.log('No release found in context. Creating a new release tag.');
+              
+              // Get the current commit SHA
+              const { data: refData } = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `heads/${context.ref.split('/').pop()}`
+              });
+              
+              // Create a new release
+              await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: `v${newVersion}`,
+                name: `v${newVersion}`,
+                target_commitish: refData.object.sha,
+                generate_release_notes: true
+              });
+            }
 
   dependency-review:
     name: Dependency Review
