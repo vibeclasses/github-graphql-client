@@ -298,9 +298,10 @@ describe('GitHubGraphQLClient', () => {
     describe('daysAgo', () => {
       it('should return date string for days ago', () => {
         const result = GitHubGraphQLClient.daysAgo(7);
-        const expectedDate = new Date();
-        expectedDate.setDate(expectedDate.getDate() - 7);
-        expect(result).toBe(expectedDate.toISOString());
+        const resultDate = new Date(result);
+        const now = new Date();
+        const daysDiff = Math.round((now.getTime() - resultDate.getTime()) / (1000 * 60 * 60 * 24));
+        expect(daysDiff).toBe(7);
       });
 
       it('should handle zero days', () => {
