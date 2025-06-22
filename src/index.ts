@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import fetch from "node-fetch";
 
 // Types for GitHub GraphQL API responses
 export interface GitHubUser {
@@ -34,7 +34,7 @@ export interface PullRequest {
   number: number;
   title: string;
   body?: string;
-  state: 'OPEN' | 'CLOSED' | 'MERGED';
+  state: "OPEN" | "CLOSED" | "MERGED";
   createdAt: string;
   updatedAt: string;
   mergedAt?: string;
@@ -63,7 +63,7 @@ export interface PullRequestsResponse {
   };
 }
 
-export interface GraphQLResponse<T = any> {
+export interface GraphQLResponse<T = unknown> {
   data?: T;
   errors?: Array<{
     message: string;
@@ -82,24 +82,29 @@ export class GitHubGraphQLClient {
   private baseUrl: string;
 
   constructor(config: GitHubGraphQLClientConfig = {}) {
-    this.token = config.token || process.env.GITHUB_TOKEN || '';
-    this.baseUrl = config.baseUrl || 'https://api.github.com/graphql';
+    this.token = config.token || process.env.GITHUB_TOKEN || "";
+    this.baseUrl = config.baseUrl || "https://api.github.com/graphql";
 
     if (!this.token) {
-      throw new Error('GitHub token is required. Set GITHUB_TOKEN environment variable or pass token in config.');
+      throw new Error(
+        "GitHub token is required. Set GITHUB_TOKEN environment variable or pass token in config."
+      );
     }
   }
 
   /**
    * Execute a custom GraphQL query
    */
-  async query<T = any>(query: string, variables: Record<string, any> = {}): Promise<T> {
+  async query<T = unknown>(
+    query: string,
+    variables: Record<string, unknown> = {}
+  ): Promise<T> {
     const response = await fetch(this.baseUrl, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'GitHub-GraphQL-Client/1.0.0',
+        Authorization: `Bearer ${this.token}`,
+        "Content-Type": "application/json",
+        "User-Agent": "GitHub-GraphQL-Client/1.0.0",
       },
       body: JSON.stringify({
         query,
@@ -114,12 +119,12 @@ export class GitHubGraphQLClient {
     const result: GraphQLResponse<T> = await response.json();
 
     if (result.errors && result.errors.length > 0) {
-      const errorMessages = result.errors.map(err => err.message).join(', ');
+      const errorMessages = result.errors.map((err) => err.message).join(", ");
       throw new Error(`GraphQL errors: ${errorMessages}`);
     }
 
     if (!result.data) {
-      throw new Error('No data returned from GraphQL query');
+      throw new Error("No data returned from GraphQL query");
     }
 
     return result.data;
@@ -249,7 +254,7 @@ export class GitHubGraphQLClient {
       );
 
       allPullRequests.push(...response.repository.pullRequests.nodes);
-      
+
       hasNextPage = response.repository.pullRequests.pageInfo.hasNextPage;
       after = response.repository.pullRequests.pageInfo.endCursor;
     }
@@ -282,15 +287,22 @@ export class GitHubPRAnalyzer {
    * Get summary statistics for pull requests since a given date
    */
   async getPRSummary(owner: string, repo: string, since: string) {
-    const prs = await this.client.getAllPullRequestsWithCommentsSince(owner, repo, since);
-    
+    const prs = await this.client.getAllPullRequestsWithCommentsSince(
+      owner,
+      repo,
+      since
+    );
+
     const summary = {
       totalPRs: prs.length,
-      openPRs: prs.filter(pr => pr.state === 'OPEN').length,
-      closedPRs: prs.filter(pr => pr.state === 'CLOSED').length,
-      mergedPRs: prs.filter(pr => pr.state === 'MERGED').length,
+      openPRs: prs.filter((pr) => pr.state === "OPEN").length,
+      closedPRs: prs.filter((pr) => pr.state === "CLOSED").length,
+      mergedPRs: prs.filter((pr) => pr.state === "MERGED").length,
       totalComments: prs.reduce((sum, pr) => sum + pr.comments.totalCount, 0),
-      totalReviewComments: prs.reduce((sum, pr) => sum + pr.reviewComments.totalCount, 0),
+      totalReviewComments: prs.reduce(
+        (sum, pr) => sum + pr.reviewComments.totalCount,
+        0
+      ),
       prsByAuthor: this.groupByAuthor(prs),
     };
 
