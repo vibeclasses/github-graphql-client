@@ -15,7 +15,7 @@
     "format": "prettier --write src/**/*.ts"
   },
   "dependencies": {
-    "node-fetch": "^2.7.0"
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
