@@ -1,0 +1,379 @@
+name: CI/CD Pipeline
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  lint-and-format:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Check formatting with Prettier
+        run: npm run format:check
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run TypeScript type checking
+        run: npm run typecheck
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [18, 20, 22]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests with coverage
+        run: npm run test:coverage
+
+      - name: Upload coverage reports to Codecov
+        if: matrix.node-version == 20
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage/coverage-final.json
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint-and-format, type-check, test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run build
+
+      - name: Check build output
+        run: |
+          ls -la dist/
+          echo "Checking that all expected files are present:"
+          test -f dist/index.js || (echo "Missing index.js" && exit 1)
+          test -f dist/index.cjs || (echo "Missing index.cjs" && exit 1)
+          test -f dist/index.d.ts || (echo "Missing index.d.ts" && exit 1)
+          test -f dist/schemas.js || (echo "Missing schemas.js" && exit 1)
+          test -f dist/validators.js || (echo "Missing validators.js" && exit 1)
+          echo "All build files present ✓"
+
+      - name: Test package exports
+        run: |
+          echo "Testing package imports..."
+          node -e "const pkg = require('./dist/index.cjs'); console.log('CJS import works:', Object.keys(pkg).length > 0)"
+          node -e "import('./dist/index.js').then(pkg => console.log('ESM import works:', Object.keys(pkg).length > 0))"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: dist/
+          retention-days: 7
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run security audit
+        run: npm audit --audit-level=moderate
+
+      - name: Check for vulnerabilities
+        run: npm audit --audit-level=high --production
+
+  auto-version:
+    name: Auto Version Bump
+    runs-on: ubuntu-latest
+    needs: [lint-and-format, type-check, test, build, security-audit]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "m@rco.sh"
+          git config --local user.name "Marco Antonio Gonzzalez Junior"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine version bump type
+        id: version-type
+        run: |
+          # Get the latest commit message
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          echo "Commit message: $COMMIT_MSG"
+
+          # Convert to lowercase for case-insensitive matching
+          COMMIT_MSG_LOWER=$(echo "$COMMIT_MSG" | tr '[:upper:]' '[:lower:]')
+
+          # Skip if commit message contains [skip version]
+          if echo "$COMMIT_MSG_LOWER" | grep -E "\[skip version\]" > /dev/null; then
+            echo "Skipping version bump due to [skip version] in commit message"
+            echo "skip=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Determine version bump type based on commit message
+          if echo "$COMMIT_MSG_LOWER" | grep -E "(bug|fix)" > /dev/null; then
+            VERSION_TYPE="patch"
+          elif echo "$COMMIT_MSG_LOWER" | grep -E "release" > /dev/null; then
+            VERSION_TYPE="major"
+          else
+            VERSION_TYPE="minor"
+          fi
+
+          echo "Version bump type: $VERSION_TYPE"
+          echo "version-type=$VERSION_TYPE" >> $GITHUB_OUTPUT
+          echo "skip=false" >> $GITHUB_OUTPUT
+
+      - name: Bump version and create tag
+        id: version-bump
+        if: steps.version-type.outputs.skip == 'false'
+        run: |
+          echo "Bumping version with type: ${{ steps.version-type.outputs.version-type }}"
+          npm version ${{ steps.version-type.outputs.version-type }} --no-git-tag-version
+
+          # Get the new version
+          NEW_VERSION=$(node -p "require('./package.json').version")
+          echo "New version: $NEW_VERSION"
+
+          # Commit the version bump
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+
+          # Create and push the tag
+          git tag "v$NEW_VERSION"
+          git push origin main --follow-tags || echo "Push failed, check branch protection rules"
+
+  publish:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+    needs: [auto-version]
+    # if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          # Fetch full history to get commit messages
+          fetch-depth: 0
+          # Use a token that can push back to the repo
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'npm'
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "m@rco.sh"
+          git config --local user.name "Marco Antonio Gonzzalez Junior"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # - name: Determine version bump type
+      #   id: version-type
+      #   run: |
+      #     # Get the latest commit message from the release
+      #     COMMIT_MSG="${{ github.event.release.body }}"
+
+      #     # If release body is empty, get the latest commit message
+      #     if [ -z "$COMMIT_MSG" ]; then
+      #       COMMIT_MSG=$(git log -1 --pretty=%B)
+      #     fi
+
+      #     echo "Commit message: $COMMIT_MSG"
+
+      #     # Convert to lowercase for case-insensitive matching
+      #     COMMIT_MSG_LOWER=$(echo "$COMMIT_MSG" | tr '[:upper:]' '[:lower:]')
+
+      #     # Determine version bump type based on commit message
+      #     if echo "$COMMIT_MSG_LOWER" | grep -E "(bug|fix)" > /dev/null; then
+      #       VERSION_TYPE="patch"
+      #     elif echo "$COMMIT_MSG_LOWER" | grep -E "release" > /dev/null; then
+      #       VERSION_TYPE="major"
+      #     else
+      #       VERSION_TYPE="minor"
+      #     fi
+
+      #     echo "Version bump type: $VERSION_TYPE"
+      #     echo "version-type=$VERSION_TYPE" >> $GITHUB_OUTPUT
+
+      # - name: Bump version
+      #   run: |
+      #     echo "Bumping version with type: ${{ steps.version-type.outputs.version-type }}"
+      #     npm version ${{ steps.version-type.outputs.version-type }} --no-git-tag-version
+
+      #     # Get the new version
+      #     NEW_VERSION=$(node -p "require('./package.json').version")
+      #     echo "New version: $NEW_VERSION"
+
+      #     # Update the git tag to match the new version
+      #     git add package.json package-lock.json
+      #     git commit -m "chore: bump version to $NEW_VERSION [skip ci]"
+
+      #     # Update the release tag to point to the new commit
+      #     git tag -f ${{ github.event.release.tag_name }}
+      #     git push origin ${{ github.event.release.tag_name }} --force
+
+      - name: Build package
+        run: npm run build
+
+      - name: Publish to NPM
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Update release with new version info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const newVersion = require('./package.json').version;
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ github.event.release.id }},
+              name: `v${newVersion}`,
+              tag_name: `v${newVersion}`
+            });
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: moderate
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC
+
+  validate-package:
+    name: Validate Package
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: dist/
+
+      - name: Pack and validate package
+        run: |
+          npm pack --dry-run
+          echo "Package validation completed ✓"
+
+      - name: Check package size
+        run: |
+          PACKED_SIZE=$(npm pack --dry-run 2>&1 | grep -o '[0-9.]*[kMG]B' | tail -1)
+          echo "Package size: $PACKED_SIZE"
+
+          # Convert to bytes for comparison (rough estimation)
+          if [[ $PACKED_SIZE == *"MB"* ]]; then
+            SIZE_NUM=$(echo $PACKED_SIZE | grep -o '[0-9.]*')
+            if (( $(echo "$SIZE_NUM > 1" | bc -l) )); then
+              echo "Warning: Package size is larger than 1MB"
+            fi
+          fi

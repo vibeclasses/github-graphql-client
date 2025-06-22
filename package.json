@@ -2,8 +2,8 @@
   "name": "@vibeclasses/github-graphql-client",
   "version": "1.0.0",
   "description": "TypeScript client for GitHub GraphQL API",
-  "main": "dist/github-graphql-client.js",
-  "types": "dist/github-graphql-client.d.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
     "dev": "ts-node examples/usage-examples.ts",
