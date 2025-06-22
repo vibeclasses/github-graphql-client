@@ -301,6 +301,9 @@ jobs:
       - name: Build package
         run: npm run build
 
+      - name: Fix package
+        run: npm pkg fix
+
       - name: Publish to NPM
         run: npm publish
         env:

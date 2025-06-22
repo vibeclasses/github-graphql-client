@@ -42,6 +42,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vibeclasses/github-graphql-client.git"
+    "url": "git+https://github.com/vibeclasses/github-graphql-client.git"
   }
 }
