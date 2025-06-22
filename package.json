@@ -9,6 +9,7 @@
     "dev": "ts-node examples/usage-examples.ts",
     "start": "node dist/examples/usage-examples.js",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write src/**/*.ts"
@@ -17,6 +18,7 @@
     "node-fetch": "^2.7.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^18.0.0",
     "@types/node-fetch": "^2.6.12",
     "eslint": "^9.29.0",

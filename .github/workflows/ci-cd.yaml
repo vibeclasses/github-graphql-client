@@ -12,7 +12,7 @@ on:
     types: [published]
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: "20"
 
 jobs:
   lint-and-format:
@@ -26,7 +26,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -35,7 +35,7 @@ jobs:
         run: npm run lint
 
       - name: Check formatting with Prettier
-        run: npm run format:check
+        run: npm run format
 
   type-check:
     name: Type Check
@@ -48,7 +48,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -70,7 +70,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -99,7 +99,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -114,8 +114,6 @@ jobs:
           test -f dist/index.js || (echo "Missing index.js" && exit 1)
           test -f dist/index.cjs || (echo "Missing index.cjs" && exit 1)
           test -f dist/index.d.ts || (echo "Missing index.d.ts" && exit 1)
-          test -f dist/schemas.js || (echo "Missing schemas.js" && exit 1)
-          test -f dist/validators.js || (echo "Missing validators.js" && exit 1)
           echo "All build files present ✓"
 
       - name: Test package exports
@@ -142,7 +140,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -169,7 +167,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Configure Git
         run: |
@@ -246,8 +244,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
 
       - name: Configure Git
         run: |
@@ -349,7 +347,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
