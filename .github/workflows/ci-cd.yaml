@@ -310,7 +310,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Update release with new version info
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const newVersion = require('./package.json').version;
